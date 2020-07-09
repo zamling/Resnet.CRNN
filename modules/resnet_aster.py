@@ -79,7 +79,7 @@ class ResNet_ASTER(nn.Module):
         self.layer5 = self._make_layer(512, 3, [2, 1]) # [1, 25]
 
         if with_lstm:
-            self.rnn = nn.LSTM(512, 256, bidirectional=True, num_layers=2)
+            self.rnn = nn.LSTM(512, 256, bidirectional=True, num_layers=2,batch_first=True)
             self.out_planes = 2 * 256
         else:
             self.out_planes = 512
@@ -114,9 +114,10 @@ class ResNet_ASTER(nn.Module):
         x5 = self.layer5(x4)
 
         cnn_feat = x5.squeeze(2) # [N, c, w]
-        cnn_feat = cnn_feat.permute(2,0,1) #[T, b, input_size]
+        cnn_feat = cnn_feat.permute(0,2,1) #[T, b, input_size]
         if self.with_lstm:
             rnn_feat, _ = self.rnn(cnn_feat)
+            rnn_feat = nn.functional.log_softmax(rnn_feat,dim=2)
             return rnn_feat
         else:
             return cnn_feat

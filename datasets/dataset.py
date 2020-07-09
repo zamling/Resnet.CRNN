@@ -11,6 +11,8 @@ import collections
 from torch.utils.data import sampler
 from torchvision import transforms
 
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 class LmdbDataset(data.Dataset):
     def __init__(self, root,num,transform = None):
         self.env = lmdb.open(root,max_readers=32,readonly=True)

@@ -22,15 +22,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot',required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to validation dataset')
 parser.add_argument('--worker', type=int, help='number of data loading workers',default=2)
-parser.add_argument('--batchSize',type=int, default=200, help='the input batch size')
+parser.add_argument('--batchSize',type=int, default=10, help='the input batch size')
 parser.add_argument('--nepoch', type=int, default=10, help='number of epochs to train')
 parser.add_argument('--alphabet',type=str,default='0123456789abcdefghijklmnopqrstuvwxyz')
 parser.add_argument('--expr_dir', default='expr', help='Where to store samples and models')
 parser.add_argument('--displayInterval', type=int, default=500, help='Interval to be displayed')
-parser.add_argument('--trainNumber', type=int, default=10, help='Number of samples to train')
-parser.add_argument('--testNumber', type=int, default=10, help='Number of samples to test')
-parser.add_argument('--valInterval', type=int, default=500, help='Interval to be displayed')
-parser.add_argument('--saveInterval', type=int, default=500, help='Interval to be displayed')
+parser.add_argument('--trainNumber', type=int, default=100, help='Number of samples to train')
+parser.add_argument('--testNumber', type=int, default=100, help='Number of samples to test')
+parser.add_argument('--valInterval', type=int, default=2, help='Interval to be displayed')
+parser.add_argument('--saveInterval', type=int, default=50000, help='Interval to be displayed')
 opt = parser.parse_args()
 
 
@@ -73,7 +73,7 @@ crnn = resnet_aster.ResNet_ASTER(with_lstm=True).cuda()
 optimizer = torch.optim.Adam(crnn.parameters(),lr=0.0001,betas=(0.5,0.999))
 
 
-# net = torch.nn.DataParallel(crnn,device_ids=range(torch.cuda.device_count()))
+net = torch.nn.DataParallel(crnn,device_ids=range(torch.cuda.device_count()))
 criterion = criterion.cuda()
 
 
@@ -97,6 +97,7 @@ def Val(net,dataset,criterion,max_iter=100):
         image = cpu_image.cuda()
         Int_text,Int_length = convert.encoder(cpu_text)
         preds = net(image)
+        preds = preds.permute(1,0,2)
         preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize)) #batch*[seq_len]
         cost = criterion(preds,Int_text,preds_size,Int_length)/opt.batchSize
         loss_avg_for_val.add(cost)
@@ -121,6 +122,7 @@ def trainBatch(net, criterion, optimizer):
     Int_text,Int_length = convert.encoder(cpu_text)
     assert len(Int_text) == Int_length.sum(), 'the encoded text length is not equal to variable length '
     preds = net(image)
+    preds = preds.permute(1, 0, 2)
     preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize))  # batch*seq_len
     cost = criterion(preds, Int_text, preds_size, Int_length) / opt.batchSize
     net.zero_grad()
