@@ -60,7 +60,7 @@ class AsterBlock(nn.Module):
 class ResNet_ASTER(nn.Module):
     """For aster or crnn"""
 
-    def __init__(self, with_lstm=False, n_group=1):
+    def __init__(self,num_class, with_lstm=False, n_group=1):
         super(ResNet_ASTER, self).__init__()
         self.with_lstm = with_lstm
         self.n_group = n_group
@@ -78,8 +78,10 @@ class ResNet_ASTER(nn.Module):
         self.layer4 = self._make_layer(256, 6, [2, 1]) # [2, 25]
         self.layer5 = self._make_layer(512, 3, [2, 1]) # [1, 25]
 
+        self.output_layer = nn.Linear(512,num_class)
+
         if with_lstm:
-            self.rnn = nn.LSTM(512, 256, bidirectional=True, num_layers=2,batch_first=True)
+            self.rnn = nn.LSTM(512, 256, bidirectional=True, num_layers=2)
             self.out_planes = 2 * 256
         else:
             self.out_planes = 512
@@ -90,6 +92,10 @@ class ResNet_ASTER(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+        nn.init.normal_(self.output_layer.weight,std=0.01)
+        nn.init.constant_(self.output_layer.bias,0)
+
+
 
     def _make_layer(self, planes, blocks, stride):
         downsample = None
@@ -114,11 +120,15 @@ class ResNet_ASTER(nn.Module):
         x5 = self.layer5(x4)
 
         cnn_feat = x5.squeeze(2) # [N, c, w]
-        cnn_feat = cnn_feat.permute(0,2,1) #[T, b, input_size]
+        cnn_feat = cnn_feat.permute(2,0,1) #[T, b, input_size]
         if self.with_lstm:
             rnn_feat, _ = self.rnn(cnn_feat)
-            rnn_feat = nn.functional.log_softmax(rnn_feat,dim=2)
-            return rnn_feat
+            T,b,h = rnn_feat.size()
+            output = rnn_feat.view(T*b,h)
+            output = self.output_layer(output)
+            output = output.view(T,b,-1)
+            output = nn.functional.log_softmax(output,dim=2)
+            return output
         else:
             return cnn_feat
 

@@ -21,7 +21,7 @@ annotation_val 802734
 parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot',required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to validation dataset')
-parser.add_argument('--worker', type=int, help='number of data loading workers',default=2)
+parser.add_argument('--worker', type=int, help='number of data loading workers',default=0)
 parser.add_argument('--batchSize',type=int, default=10, help='the input batch size')
 parser.add_argument('--nepoch', type=int, default=10, help='number of epochs to train')
 parser.add_argument('--alphabet',type=str,default='0123456789abcdefghijklmnopqrstuvwxyz')
@@ -42,6 +42,7 @@ cudnn.benchmark = True
 
 if torch.cuda.is_available():
     print(torch.cuda.get_device_name(0),' is avaliable')
+    device = torch.device('cuda:1')
 else:
     print('using cpu actually')
     device = torch.device('cpu')
@@ -69,12 +70,13 @@ loss_avg_for_tra = utils.Averager()
 
 
 
-crnn = resnet_aster.ResNet_ASTER(with_lstm=True).cuda()
+crnn = resnet_aster.ResNet_ASTER(num_class=len(opt.alphabet)+1,with_lstm=True).to(device)
+
 optimizer = torch.optim.Adam(crnn.parameters(),lr=0.0001,betas=(0.5,0.999))
 
 
-net = torch.nn.DataParallel(crnn,device_ids=range(torch.cuda.device_count()))
-criterion = criterion.cuda()
+# net = torch.nn.DataParallel(crnn,device_ids=range(torch.cuda.device_count()))
+criterion = criterion.to(device)
 
 
 
@@ -94,10 +96,9 @@ def Val(net,dataset,criterion,max_iter=100):
         pbar.set_description('running evaluation')
         data = val_iter.next()
         cpu_image, cpu_text = data
-        image = cpu_image.cuda()
+        image = cpu_image.to(device)
         Int_text,Int_length = convert.encoder(cpu_text)
         preds = net(image)
-        preds = preds.permute(1,0,2)
         preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize)) #batch*[seq_len]
         cost = criterion(preds,Int_text,preds_size,Int_length)/opt.batchSize
         loss_avg_for_val.add(cost)
@@ -118,11 +119,10 @@ def Val(net,dataset,criterion,max_iter=100):
 def trainBatch(net, criterion, optimizer):
     data = train_iter.next()
     cpu_image, cpu_text = data
-    image = cpu_image.cuda()
+    image = cpu_image.to(device)
     Int_text,Int_length = convert.encoder(cpu_text)
     assert len(Int_text) == Int_length.sum(), 'the encoded text length is not equal to variable length '
     preds = net(image)
-    preds = preds.permute(1, 0, 2)
     preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize))  # batch*seq_len
     cost = criterion(preds, Int_text, preds_size, Int_length) / opt.batchSize
     net.zero_grad()
