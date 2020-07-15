@@ -59,53 +59,101 @@ class resizeNormalize(object):
         return img
 
 
+
+
 class strLabelToInt(object):
-    def __init__(self, alphabet, is_ignore = True):
-        self._is_ignore = is_ignore
-        if self._is_ignore:
-            alphabet = alphabet.lower()
-        self.alphabet = alphabet + '*' +'-'
+    def __init__(self,alphabet):
+        self.voc = []
+        self.voc.append('PADDING') # for CTC, the blank must be located at 0 position
+        self.voc.extend(list(alphabet))
+        self.voc.append('UNKNOWN')
         self.dict = {}
-        for i,char in enumerate(self.alphabet):
-            self.dict[char] = i + 1 # the '-' == 0, '*'== Unknown
+        for i,char in enumerate(self.voc):
+            self.dict[char] = i
 
     def encoder(self,words):
-        if isinstance(words,str):
-            # text = [self.dict[char.lower() if self._is_ignore else char] for char in words] #text is a list in Int
-            text = []
-            for i in words:
-                if i.lower() not in self.alphabet[:-2]:
-                    text.append(self.dict['*'])
-                else:
-                    text.append(self.dict[i.lower()])
-            length = len(text)
-        elif isinstance(words,collections.Iterable):
-            length = [len(s) for s in words]
-            text = ''.join(words)
-            text ,_ = self.encoder(text)
-        return (torch.IntTensor(text),torch.IntTensor(length))
+        texts = []
+        text = ''.join(words)
+        lengths = [len(s) for s in words]
+        for i in text:
+            if i in self.voc:
+                texts.append(self.dict[i])
+            else:
+                print('{} is out of vocabulary'.format(i))
+                texts.append(self.dict['UNKNOWN'])
+        return (torch.IntTensor(texts),torch.IntTensor(lengths))
 
-    def decoder(self,text,length,raw = True):
+    def decoder(self,text, length):
         if length.numel() == 1:
             length = length.item()
-            assert length == text.numel(),"text has the length {}, while the claimed length is {}".format(text.numel(),length)
-            if raw:
-                str_text = ''.join([self.alphabet[i-1] for i in text]) # 0-1 = -1 最后一个是'-'
-                return str_text
-            else:
-                char_list = []
-                for i in range(length):
-                    if text[i] != 0 and (not(i>0 and text[i-1] == text[i])):
-                        char_list.append(self.alphabet[text[i]-1])
+            assert length == text.numel(), "text has the length {}, while the claimed length is {}".format(
+                    text.numel(), length)
+            char_list = []
+            for i in range(length):
+                if text[i] != 0 and (not (i > 0 and text[i - 1] == text[i])):
+                    char_list.append(self.voc[i])
                 return ''.join(char_list)
         else:
-            assert text.numel() == length.sum(),"the batch text has the length {}, while the claimed length is {}".format(text.numel(),length.sum())
+            assert text.numel() == length.sum(), "the batch text has the length {}, while the claimed length is {}".format(
+                    text.numel(), length.sum())
             texts = []
             index = 0
             for i in range(length.numel()):
                 l = length[i]
                 texts.append(
-                    self.decoder(text[index:index+l],length[i],raw = raw)
+                    self.decoder(text[index:index + l], length[i])
                 )
                 index += l
             return texts
+
+
+# class strLabelToInt(object):
+#     def __init__(self, alphabet, is_ignore = True):
+#         self._is_ignore = is_ignore
+#         if self._is_ignore:
+#             alphabet = alphabet.lower()
+#         self.alphabet = alphabet + '*' +'-'
+#         self.dict = {}
+#         for i,char in enumerate(self.alphabet):
+#             self.dict[char] = i + 1 # the '-' == 0, '*'== Unknown
+#
+#     def encoder(self,words):
+#         if isinstance(words,str):
+#             # text = [self.dict[char.lower() if self._is_ignore else char] for char in words] #text is a list in Int
+#             text = []
+#             for i in words:
+#                 if i.lower() not in self.alphabet[:-2]:
+#                     text.append(self.dict['*'])
+#                 else:
+#                     text.append(self.dict[i.lower()])
+#             length = len(text)
+#         elif isinstance(words,collections.Iterable):
+#             length = [len(s) for s in words]
+#             text = ''.join(words)
+#             text ,_ = self.encoder(text)
+#         return (torch.IntTensor(text),torch.IntTensor(length))
+#
+#     def decoder(self,text,length,raw = True):
+#         if length.numel() == 1:
+#             length = length.item()
+#             assert length == text.numel(),"text has the length {}, while the claimed length is {}".format(text.numel(),length)
+#             if raw:
+#                 str_text = ''.join([self.alphabet[i-1] for i in text]) # 0-1 = -1 最后一个是'-'
+#                 return str_text
+#             else:
+#                 char_list = []
+#                 for i in range(length):
+#                     if text[i] != 0 and (not(i>0 and text[i-1] == text[i])):
+#                         char_list.append(self.alphabet[text[i]-1])
+#                 return ''.join(char_list)
+#         else:
+#             assert text.numel() == length.sum(),"the batch text has the length {}, while the claimed length is {}".format(text.numel(),length.sum())
+#             texts = []
+#             index = 0
+#             for i in range(length.numel()):
+#                 l = length[i]
+#                 texts.append(
+#                     self.decoder(text[index:index+l],length[i],raw = raw)
+#                 )
+#                 index += l
+#             return texts
