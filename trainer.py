@@ -4,6 +4,7 @@ import torch
 import argparse
 import torch.nn as nn
 from utils import utils
+import string
 
 from datasets import concatdataset, dataset
 from modules import resnet_aster
@@ -25,12 +26,11 @@ parser.add_argument('--valRoot', required=True, help='path to validation dataset
 parser.add_argument('--worker', type=int, help='number of data loading workers',default=2)
 parser.add_argument('--batchSize',type=int, default=500, help='the input batch size')
 parser.add_argument('--nepoch', type=int, default=10, help='number of epochs to train')
-parser.add_argument('--alphabet',type=str,default='0123456789abcdefghijklmnopqrstuvwxyz')
 parser.add_argument('--expr_dir', default='expr', help='Where to store samples and models')
 parser.add_argument('--log_dir', default='log', help='Where to store log')
-parser.add_argument('--displayInterval', type=int, default=5000, help='Interval to be displayed')
-parser.add_argument('--trainNumber', type=int, default=1000000000, help='Number of samples to train')
-parser.add_argument('--testNumber', type=int, default=1000000000, help='Number of samples to test')
+parser.add_argument('--displayInterval', type=int, default=1000, help='Interval to be displayed')
+parser.add_argument('--trainNumber', type=int, default=100000000, help='Number of samples to train')
+parser.add_argument('--testNumber', type=int, default=100000000, help='Number of samples to test')
 parser.add_argument('--valInterval', type=int, default=10000, help='Interval to be displayed')
 parser.add_argument('--saveInterval', type=int, default=10000, help='Interval to be displayed')
 parser.add_argument('--lr',type=float, default=1,help='learning rate')
@@ -78,15 +78,15 @@ train_dataset, train_loader = get_data(train_dir_list, num=opt.trainNumber,batch
 test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=opt.batchSize, worker=opt.worker)
 
 
-
-convert = dataset.strLabelToInt(opt.alphabet)
+alphabet = string.printable[:-6]
+convert = dataset.strLabelToInt(alphabet)
 criterion = nn.CTCLoss()
 loss_avg_for_val = utils.Averager()
 loss_avg_for_tra = utils.Averager()
 
 
 
-crnn = resnet_aster.ResNet_ASTER(num_class=len(opt.alphabet)+1,with_lstm=True).to(device)
+crnn = resnet_aster.ResNet_ASTER(num_class=convert.num_class,with_lstm=True).to(device)
 
 param_groups = crnn.parameters()
 param_groups = filter(lambda p: p.requires_grad, param_groups)
@@ -104,6 +104,7 @@ best_model = None
 
 def Val(net,data_loader,criterion,best_model,max_iter=1000000):
     print("Start Validation")
+    is_change = False
 
     for p in net.parameters():
         p.requires_grad = False
@@ -126,7 +127,7 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         _, preds = preds.max(2)
 
         preds = preds.transpose(1, 0).contiguous().view(-1)
-        sim_preds = convert.decoder(preds,preds_size,raw=False)
+        sim_preds = convert.decoder(preds,preds_size)
         if i%5 == 0 and i != 0:
             print('\n',"the predicted text is {}, while the real text is {}".format(sim_preds[0], cpu_text[0]))
         for pred, target in zip(sim_preds,cpu_text):
@@ -135,16 +136,18 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
     accuracy = n_correct / float(max_iter * opt.batchSize)
     if best_model == None:
         best_accuracy = accuracy
+        is_change = True
     else:
         if accuracy > best_model:
             best_accuracy = accuracy
+            is_change = True
         else:
             best_accuracy = best_model
 
 
     print('Test loss: %f, accuracy: %f, best accuracy %f' % (loss_avg_for_val.val(), accuracy, best_accuracy))
     loss_avg_for_val.reset()
-    return best_accuracy
+    return best_accuracy, is_change
 
 def trainBatch(net, criterion, optimizer):
     data = train_iter.next()
@@ -183,10 +186,11 @@ for epoch in range(opt.nepoch):
             f.write('[%d/%d][%d/%d] Loss: %f \n' % (epoch+1, opt.nepoch, i, len(train_loader), loss_avg_for_tra.val()))
             loss_avg_for_tra.reset()
         if i%opt.valInterval == 0 and i != 0:
-            best_model = Val(crnn,test_loader,criterion,best_model)
-            f.write('------------------------------------------------------\n')
-            f.write('Best accuracy %f, the model name is RESNET_CRNN_%d_%d.pth \n' % (best_model,epoch+1,i))
-            f.write('------------------------------------------------------\n')
+            best_model, is_change = Val(crnn,test_loader,criterion,best_model)
+            if is_change:
+                f.write('------------------------------------------------------\n')
+                f.write('Best accuracy %f, the model name is RESNET_CRNN_%d_%d.pth \n' % (best_model,epoch+1,i))
+                f.write('------------------------------------------------------\n')
 
         if i%opt.saveInterval == 0 and i != 0:
             torch.save(crnn.state_dict(),'{0}/RESNET_CRNN_{1}_{2}.pth'.format(opt.expr_dir, epoch+1, i))

@@ -21,6 +21,8 @@ class LmdbDataset(data.Dataset):
         self.txn = self.env.begin()
         self.transform = transform
         self.nSamples = int(self.txn.get(b"num-samples"))
+        # self.nSamples = min(self.nSamples,num)
+
 
 
     def __len__(self):
@@ -67,6 +69,7 @@ class strLabelToInt(object):
         self.voc.append('PADDING') # for CTC, the blank must be located at 0 position
         self.voc.extend(list(alphabet))
         self.voc.append('UNKNOWN')
+        self.num_class = len(self.voc)
         self.dict = {}
         for i,char in enumerate(self.voc):
             self.dict[char] = i
