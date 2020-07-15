@@ -4,7 +4,8 @@ import torch
 import argparse
 import torch.nn as nn
 from utils import utils
-from datasets import dataset
+
+from datasets import concatdataset, dataset
 from modules import resnet_aster
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -48,19 +49,32 @@ else:
     device = torch.device('cpu')
 
 
+def get_data(data_dir, num, batch_size,worker):
+    if isinstance(data_dir, list):
+        dataset_list = []
+        for data_dir_ in data_dir:
+            dataset_list.append(dataset.LmdbDataset(data_dir_,num,transform=dataset.resizeNormalize((100,32))))
+        datasets = concatdataset.ConcatDataset(dataset_list)
+    else:
+        datasets = dataset.LmdbDataset(data_dir,num,transform=dataset.resizeNormalize((100,32)))
+    print('total image', len(datasets))
+
+    data_loader = DataLoader(datasets,batch_size=batch_size,shuffle=True,num_workers=worker,drop_last=True)
+
+    return datasets, data_loader
 
 
+train_dir_list = []
+test_dir_list = []
 
+train_dataset, train_loader = get_data(train_dir_list, num=opt.trainNumber,batch_size=opt.batchSize, worker=opt.worker)
+test_dataset, test_loader = get_data(test_dir_list, num=opt.testNumber,batch_size=opt.batchSize, worker=opt.worker)
 
-
-
-
-
-train_dataset = dataset.LmdbDataset(root=opt.trainRoot,num=opt.trainNumber,transform=dataset.resizeNormalize((100,32)))
-
-train_loader = DataLoader(dataset=train_dataset,batch_size=opt.batchSize,shuffle=True,num_workers=opt.worker,drop_last=True)
-
-test_dataset = dataset.LmdbDataset(root=opt.valRoot,num=opt.testNumber,transform=dataset.resizeNormalize((100,32)))
+# train_dataset = dataset.LmdbDataset(root=opt.trainRoot,num=opt.trainNumber,transform=dataset.resizeNormalize((100,32)))
+#
+# train_loader = DataLoader(dataset=train_dataset,batch_size=opt.batchSize,shuffle=True,num_workers=opt.worker,drop_last=True)
+#
+# test_dataset = dataset.LmdbDataset(root=opt.valRoot,num=opt.testNumber,transform=dataset.resizeNormalize((100,32)))
 
 
 convert = dataset.strLabelToInt(opt.alphabet)
@@ -72,7 +86,12 @@ loss_avg_for_tra = utils.Averager()
 
 crnn = resnet_aster.ResNet_ASTER(num_class=len(opt.alphabet)+1,with_lstm=True).to(device)
 
-optimizer = torch.optim.Adam(crnn.parameters(),lr=0.0001,betas=(0.5,0.999))
+param_groups = crnn.parameters()
+param_groups = filter(lambda p: p.requires_grad, param_groups)
+optimizer = torch.optim.Adadelta(param_groups, lr=args.lr, weight_decay=args.weight_decay)
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4, 5], gamma=0.1)
+# optimizer = torch.optim.Adadelta(crnn.parameters(), lr=1.0, weight_decay=0.0)
+# scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4,5], gamma=0.1)
 
 
 # net = torch.nn.DataParallel(crnn,device_ids=range(torch.cuda.device_count()))
@@ -80,7 +99,7 @@ criterion = criterion.to(device)
 
 
 
-def Val(net,dataset,criterion,max_iter=100):
+def Val(net,dataset,criterion,max_iter=10000):
     print("Start Validation")
 
     for p in net.parameters():
@@ -132,7 +151,7 @@ def trainBatch(net, criterion, optimizer):
 
 for epoch in range(opt.nepoch):
     train_iter = iter(train_loader)
-    i = 0
+    scheduler.step(epoch)
     tbar = tqdm(range(len(train_loader)))
     for i in tbar:
         tbar.set_description('running trainning')

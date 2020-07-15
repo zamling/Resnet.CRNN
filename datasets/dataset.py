@@ -65,14 +65,20 @@ class strLabelToInt(object):
         self._is_ignore = is_ignore
         if self._is_ignore:
             alphabet = alphabet.lower()
-        self.alphabet = alphabet + '-'
+        self.alphabet = alphabet + '*' +'-'
         self.dict = {}
-        for i,char in enumerate(alphabet):
-            self.dict[char] = i + 1 # the '-' = 0
+        for i,char in enumerate(self.alphabet):
+            self.dict[char] = i + 1 # the '-' == 0, '*'== Unknown
 
     def encoder(self,words):
         if isinstance(words,str):
-            text = [self.dict[char.lower() if self._is_ignore else char] for char in words] #text is a list in Int
+            # text = [self.dict[char.lower() if self._is_ignore else char] for char in words] #text is a list in Int
+            text = []
+            for i in words:
+                if i.lower() not in self.alphabet[:-2]:
+                    text.append(self.dict['*'])
+                else:
+                    text.append(self.dict[i])
             length = len(text)
         elif isinstance(words,collections.Iterable):
             length = [len(s) for s in words]
