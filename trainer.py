@@ -22,17 +22,17 @@ annotation_val 802734
 parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot',required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to validation dataset')
-parser.add_argument('--worker', type=int, help='number of data loading workers',default=0)
-parser.add_argument('--batchSize',type=int, default=10, help='the input batch size')
-parser.add_argument('--nepoch', type=int, default=5, help='number of epochs to train')
+parser.add_argument('--worker', type=int, help='number of data loading workers',default=2)
+parser.add_argument('--batchSize',type=int, default=500, help='the input batch size')
+parser.add_argument('--nepoch', type=int, default=10, help='number of epochs to train')
 parser.add_argument('--alphabet',type=str,default='0123456789abcdefghijklmnopqrstuvwxyz')
 parser.add_argument('--expr_dir', default='expr', help='Where to store samples and models')
 parser.add_argument('--log_dir', default='log', help='Where to store log')
-parser.add_argument('--displayInterval', type=int, default=4, help='Interval to be displayed')
-parser.add_argument('--trainNumber', type=int, default=100, help='Number of samples to train')
-parser.add_argument('--testNumber', type=int, default=100, help='Number of samples to test')
-parser.add_argument('--valInterval', type=int, default=2, help='Interval to be displayed')
-parser.add_argument('--saveInterval', type=int, default=50000, help='Interval to be displayed')
+parser.add_argument('--displayInterval', type=int, default=5000, help='Interval to be displayed')
+parser.add_argument('--trainNumber', type=int, default=1000000000, help='Number of samples to train')
+parser.add_argument('--testNumber', type=int, default=1000000000, help='Number of samples to test')
+parser.add_argument('--valInterval', type=int, default=10000, help='Interval to be displayed')
+parser.add_argument('--saveInterval', type=int, default=10000, help='Interval to be displayed')
 parser.add_argument('--lr',type=float, default=1,help='learning rate')
 parser.add_argument('--weight_decay',type=float, default=0.0)
 
@@ -75,8 +75,7 @@ train_dir_list = [opt.trainRoot+i for i in ['/CVPR2016','/NIPS2014']]
 test_dir = opt.trainRoot + '/benchmark_lmdbs_new/IIIT5K_3000'
 
 train_dataset, train_loader = get_data(train_dir_list, num=opt.trainNumber,batch_size=opt.batchSize, worker=opt.worker)
-test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=opt.batchSize, worker=opt.worker)
-
+test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=100, worker=opt.worker)
 
 
 
@@ -122,7 +121,7 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         Int_text,Int_length = convert.encoder(cpu_text)
         preds = net(image)
         preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize)) #batch*[seq_len]
-        cost = criterion(preds,Int_text,preds_size,Int_length)/opt.batchSize
+        cost = criterion(preds,Int_text,preds_size,Int_length)/100
         loss_avg_for_val.add(cost)
         _, preds = preds.max(2)
 

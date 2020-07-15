@@ -21,7 +21,6 @@ class LmdbDataset(data.Dataset):
         self.txn = self.env.begin()
         self.transform = transform
         self.nSamples = int(self.txn.get(b"num-samples"))
-        self.nSamples = min(self.nSamples,num)
 
 
     def __len__(self):
