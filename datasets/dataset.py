@@ -91,8 +91,8 @@ class strLabelToInt(object):
             char_list = []
             for i in range(length):
                 if text[i] != 0 and (not (i > 0 and text[i - 1] == text[i])):
-                    char_list.append(self.voc[i])
-                return ''.join(char_list)
+                    char_list.append(self.voc[text[i]])
+            return ''.join(char_list)
         else:
             assert text.numel() == length.sum(), "the batch text has the length {}, while the claimed length is {}".format(
                     text.numel(), length.sum())
