@@ -78,7 +78,7 @@ class strLabelToInt(object):
                 if i.lower() not in self.alphabet[:-2]:
                     text.append(self.dict['*'])
                 else:
-                    text.append(self.dict[i])
+                    text.append(self.dict[i.lower()])
             length = len(text)
         elif isinstance(words,collections.Iterable):
             length = [len(s) for s in words]

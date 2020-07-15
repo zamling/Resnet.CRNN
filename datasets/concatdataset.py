@@ -29,9 +29,6 @@ class ConcatDataset(Dataset):
         assert len(datasets) > 0, 'datasets should not be an empty iterable'
         self.datasets = list(datasets)
         self.cumulative_sizes = self.cumsum(self.datasets)
-        self.max_len = max([_dataset.max_len for _dataset in self.datasets])
-        for _dataset in self.datasets:
-            _dataset.max_len = self.max_len
 
     def __len__(self):
         return self.cumulative_sizes[-1]
