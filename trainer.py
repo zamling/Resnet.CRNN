@@ -80,7 +80,7 @@ test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=opt
 
 alphabet = string.printable[:-6]
 convert = dataset.strLabelToInt(alphabet)
-criterion = nn.CTCLoss()
+criterion = nn.CTCLoss(zero_infinity=True)
 loss_avg_for_val = utils.Averager()
 loss_avg_for_tra = utils.Averager()
 
@@ -131,7 +131,7 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         if i%5 == 0 and i != 0:
             print('\n',"the predicted text is {}, while the real text is {}".format(sim_preds[0], cpu_text[0]))
         for pred, target in zip(sim_preds,cpu_text):
-            if pred == target.lower():
+            if pred == target:
                 n_correct += 1
     accuracy = n_correct / float(max_iter * opt.batchSize)
     if best_model == None:
@@ -157,7 +157,9 @@ def trainBatch(net, criterion, optimizer):
     assert len(Int_text) == Int_length.sum(), 'the encoded text length is not equal to variable length '
     preds = net(image)
     preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize))  # batch*seq_len
+    torch.backends.cudnn.enabled = False
     cost = criterion(preds, Int_text, preds_size, Int_length) / opt.batchSize
+    torch.backends.cudnn.enabled = True
     net.zero_grad()
     cost.backward()
     optimizer.step()
@@ -168,7 +170,6 @@ if not os.path.exists(opt.log_dir):
     os.makedirs(opt.log_dir)
 f_name = '{0}/log1.txt'.format(opt.log_dir)
 f = open(f_name,'w')
-
 for epoch in range(opt.nepoch):
 
     train_iter = iter(train_loader)
@@ -195,5 +196,5 @@ for epoch in range(opt.nepoch):
         if i%opt.saveInterval == 0 and i != 0:
             torch.save(crnn.state_dict(),'{0}/RESNET_CRNN_{1}_{2}.pth'.format(opt.expr_dir, epoch+1, i))
     scheduler.step()
-#logging finish
+    #logging finish
 f.close()
