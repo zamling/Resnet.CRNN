@@ -2,6 +2,7 @@ from PIL import Image, ImageFile
 from tqdm import tqdm
 import numpy as np
 import lmdb
+import string
 import cv2
 import sys
 import six
@@ -109,6 +110,17 @@ class strLabelToInt(object):
                 )
                 index += l
             return texts
+
+
+
+if __name__ == "__main__":
+    alphabet = string.printable[:-6]
+    convert = strLabelToInt(alphabet)
+    texts = ('THE', 'the','aAbBcC', 'aaadfdfccd')
+    Int_text, Int_length = convert.encoder(texts)
+    print(Int_text, "length is :", Int_length)
+    print(convert.decoder(Int_text,Int_length))
+
 
 
 # class strLabelToInt(object):

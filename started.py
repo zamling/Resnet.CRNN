@@ -153,7 +153,6 @@ def trainBatch(net, criterion, optimizer):
     data = train_iter.next()
     cpu_image, cpu_text = data
     image = cpu_image.to(device)
-    cpu_text = ['Ajlasjflksfjlskajflskjflskjflsajflksdfjlaskdjflasdfj','a','b','c','d','e','f','w','e','t']
     Int_text,Int_length = convert.encoder(cpu_text)
     assert len(Int_text) == Int_length.sum(), 'the encoded text length is not equal to variable length '
     preds = net(image)

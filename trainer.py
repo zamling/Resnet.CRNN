@@ -31,7 +31,7 @@ parser.add_argument('--log_dir', default='log', help='Where to store log')
 parser.add_argument('--displayInterval', type=int, default=1000, help='Interval to be displayed')
 parser.add_argument('--trainNumber', type=int, default=100000000, help='Number of samples to train')
 parser.add_argument('--testNumber', type=int, default=100000000, help='Number of samples to test')
-parser.add_argument('--valInterval', type=int, default=10000, help='Interval to be displayed')
+parser.add_argument('--valInterval', type=int, default=5000, help='Interval to be displayed')
 parser.add_argument('--saveInterval', type=int, default=10000, help='Interval to be displayed')
 parser.add_argument('--lr',type=float, default=1,help='learning rate')
 parser.add_argument('--weight_decay',type=float, default=0.0)
@@ -122,14 +122,13 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         Int_text,Int_length = convert.encoder(cpu_text)
         preds = net(image)
         preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize)) #batch*[seq_len]
-        cost = criterion(preds,Int_text,preds_size,Int_length)/opt.batchSize
+        cost = criterion(preds,Int_text,preds_size,Int_length)
         loss_avg_for_val.add(cost)
         _, preds = preds.max(2)
 
         preds = preds.transpose(1, 0).contiguous().view(-1)
         sim_preds = convert.decoder(preds,preds_size)
-        if i%5 == 0 and i != 0:
-            print('\n',"the predicted text is {}, while the real text is {}".format(sim_preds[0], cpu_text[0]))
+        print('\n',"the predicted text is {}, while the real text is {}".format(sim_preds[0], cpu_text[0]))
         for pred, target in zip(sim_preds,cpu_text):
             if pred == target:
                 n_correct += 1
@@ -158,7 +157,7 @@ def trainBatch(net, criterion, optimizer):
     preds = net(image)
     preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize))  # batch*seq_len
     torch.backends.cudnn.enabled = False
-    cost = criterion(preds, Int_text, preds_size, Int_length) / opt.batchSize
+    cost = criterion(preds, Int_text, preds_size, Int_length)
     torch.backends.cudnn.enabled = True
     net.zero_grad()
     cost.backward()
