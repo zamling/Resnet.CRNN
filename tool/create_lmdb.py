@@ -32,7 +32,7 @@ def crop_img(img,texts):
     y_min = min(y1, y2, y3, y4)
     crop_img = img[y_min:y_max,x_min:x_max]
     crop_img_bytes = crop_img.tobytes()
-    return crop_img
+    return crop_img_bytes
 
 
 
@@ -40,7 +40,7 @@ def checkImageIsValid(image):
     if image is None:
         return False
     imgH, imgW = image.shape[0], image.shape[1]
-    if imgH * imgW == 0:
+    if imgH * imgW == 0 or imgH > imgW:
         return False
     return True
 
