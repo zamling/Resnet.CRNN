@@ -25,6 +25,7 @@ def crop_img(img,texts):
     2(327,180)
     3(327,290)
     4(23, 283)
+    
     '''
     x_max = max(x1, x2, x3, x4)
     y_max = max(y1, y2, y3, y4)
@@ -75,10 +76,10 @@ def createDataset(outputPath, imagePathList, jsonList):
         if not os.path.exists(imagePath):
             print('%s does not exist' % imagePath)
             continue
-        json = jsonList[i]
+        json_file = jsonList[i]
         img = cv2.imread(imagePath)
 
-        with open(json, 'r') as f:
+        with open(json_file, 'r') as f:
             data = json.load(f)
 
         label_list = []
@@ -86,18 +87,18 @@ def createDataset(outputPath, imagePathList, jsonList):
         for info in data['lines']:
             if info['ignore'] != 0:
                 continue
-            crop_img = crop_img(img,info)
-            if checkImageIsValid(crop_img):
+            crop_image = crop_img(img,info)
+            if checkImageIsValid(crop_image):
                 label_list.append(info['transcription'])
-                img_list.append(crop_img.tobytes())
+                img_list.append(crop_image.tobytes())
             else:
-                print('%s is invalid, the Height is %d, the Width is %d' % (imagePath,crop_img.shape[0],crop_img.shape[1]))
+                print('%s is invalid, the Height is %d, the Width is %d' % (imagePath,crop_image.shape[0],crop_image.shape[1]))
         assert len(label_list) == len(img_list),'the label_list != img_list'
         for i in range(len(img_list)):
             imageKey = 'image-%09d' % cnt
             labelKey = 'label-%09d' % cnt
             cache[imageKey] = img_list[i]
-            cache[labelKey] = label_list[i].encoder()
+            cache[labelKey] = label_list[i].encode()
             if cnt % 1000 == 0:
                 writeCache(env, cache)
                 cache = {}
@@ -119,6 +120,7 @@ if __name__ == "__main__":
         img_list.append(os.path.join(img_root,'train_ReCTS_%06d.jpg' % (i+1)))
         json_list.append(os.path.join(gt_root,'train_ReCTS_%06d.json' % (i+1)))
     createDataset(outputPath=lmdb_output,imagePathList=img_list,jsonList=json_list)
+
 
 
 
