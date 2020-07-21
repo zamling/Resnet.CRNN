@@ -1,5 +1,6 @@
 import cv2
 import os
+import datetime
 import torch
 import argparse
 import torch.nn as nn
@@ -16,23 +17,27 @@ from tqdm import tqdm
 from PIL import Image
 
 '''
-annotation_train 7224612
-annotation_test 891927 
-annotation_val 802734 
+TODO:
+add the pretrain part
+add the checkpoint part
+from datetime import datetime
+
+print('[{}]'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+
 '''
 parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot',required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to validation dataset')
 parser.add_argument('--worker', type=int, help='number of data loading workers',default=0)
-parser.add_argument('--batchSize',type=int, default=10, help='the input batch size')
-parser.add_argument('--nepoch', type=int, default=10, help='number of epochs to train')
+parser.add_argument('--batchSize',type=int, default=500, help='the input batch size')
+parser.add_argument('--nepoch', type=int, default=6, help='number of epochs to train')
 parser.add_argument('--expr_dir', default='expr', help='Where to store samples and models')
 parser.add_argument('--log_dir', default='log', help='Where to store log')
-parser.add_argument('--displayInterval', type=int, default=4, help='Interval to be displayed')
-parser.add_argument('--trainNumber', type=int, default=100, help='Number of samples to train')
-parser.add_argument('--testNumber', type=int, default=100, help='Number of samples to test')
-parser.add_argument('--valInterval', type=int, default=4, help='Interval to be displayed')
-parser.add_argument('--saveInterval', type=int, default=10000, help='Interval to be displayed')
+parser.add_argument('--displayInterval', type=int, default=1000, help='Interval to be displayed')
+parser.add_argument('--trainNumber', type=int, default=1000000000, help='Number of samples to train')
+parser.add_argument('--testNumber', type=int, default=10000000000, help='Number of samples to test')
+parser.add_argument('--valInterval', type=int, default=5000, help='Interval to be displayed')
+parser.add_argument('--saveInterval', type=int, default=5000, help='Interval to be displayed')
 parser.add_argument('--lr',type=float, default=1,help='learning rate')
 parser.add_argument('--weight_decay',type=float, default=0.0)
 
@@ -94,7 +99,6 @@ optimizer = torch.optim.Adadelta(param_groups, lr=opt.lr, weight_decay=opt.weigh
 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4, 5], gamma=0.1)
 
 
-# net = torch.nn.DataParallel(crnn,device_ids=range(torch.cuda.device_count()))
 criterion = criterion.to(device)
 
 

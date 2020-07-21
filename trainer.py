@@ -23,22 +23,26 @@ annotation_val 802734
 parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot',required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to validation dataset')
-parser.add_argument('--worker', type=int, help='number of data loading workers',default=2)
-parser.add_argument('--batchSize',type=int, default=500, help='the input batch size')
-parser.add_argument('--nepoch', type=int, default=10, help='number of epochs to train')
+parser.add_argument('--worker', type=int, help='number of data loading workers',default=4)
+parser.add_argument('--trainbatchSize',type=int, default=800, help='the input batch size')
+parser.add_argument('--testbatchSize',type=int, default=500, help='the input batch size')
+parser.add_argument('--nepoch', type=int, default=7, help='number of epochs to train')
 parser.add_argument('--expr_dir', default='expr', help='Where to store samples and models')
 parser.add_argument('--log_dir', default='log', help='Where to store log')
 parser.add_argument('--displayInterval', type=int, default=1000, help='Interval to be displayed')
 parser.add_argument('--trainNumber', type=int, default=100000000, help='Number of samples to train')
 parser.add_argument('--testNumber', type=int, default=100000000, help='Number of samples to test')
 parser.add_argument('--valInterval', type=int, default=5000, help='Interval to be displayed')
-parser.add_argument('--saveInterval', type=int, default=10000, help='Interval to be displayed')
+parser.add_argument('--saveInterval', type=int, default=5000, help='Interval to be displayed')
 parser.add_argument('--lr',type=float, default=1,help='learning rate')
 parser.add_argument('--weight_decay',type=float, default=0.0)
+parser.add_argument('--pretrain',type=bool, default=True)
+
 
 
 opt = parser.parse_args()
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 if not os.path.exists(opt.expr_dir):
     os.makedirs(opt.expr_dir)
@@ -49,7 +53,8 @@ cudnn.benchmark = True
 if torch.cuda.is_available():
     print(torch.cuda.get_device_name(0),' is avaliable')
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    device = torch.device('cuda:1')
+
+    device = torch.device('cuda:0')
 else:
     print('using cpu actually')
     torch.set_default_tensor_type('torch.FloatTensor')
@@ -74,8 +79,8 @@ def get_data(data_dir, num, batch_size,worker):
 train_dir_list = [opt.trainRoot+i for i in ['/CVPR2016','/NIPS2014']]
 test_dir = opt.trainRoot + '/benchmark_lmdbs_new/IIIT5K_3000'
 
-train_dataset, train_loader = get_data(train_dir_list, num=opt.trainNumber,batch_size=opt.batchSize, worker=opt.worker)
-test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=opt.batchSize, worker=opt.worker)
+train_dataset, train_loader = get_data(train_dir_list, num=opt.trainNumber,batch_size=opt.trainbatchSize, worker=opt.worker)
+test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=opt.testbatchSize, worker=opt.worker)
 
 
 alphabet = string.printable[:-6]
@@ -98,6 +103,14 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4, 5], g
 criterion = criterion.to(device)
 
 
+if opt.pretrain:
+    checkpoint = torch.load('/data1/zem/Resnet.CRNN/expr/RESNET_CRNN_2_20000.pth', map_location='cuda:0')
+    crnn.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    start_epoch = checkpoint['epoch'] + 1
+else:
+    start_epoch = 0
+
 
 #record best model
 best_model = None
@@ -108,7 +121,6 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
 
     for p in net.parameters():
         p.requires_grad = False
-
     net.eval()
     val_iter = iter(data_loader)
     n_correct = 0
@@ -121,7 +133,7 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         image = cpu_image.to(device)
         Int_text,Int_length = convert.encoder(cpu_text)
         preds = net(image)
-        preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize)) #batch*[seq_len]
+        preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.testbatchSize)) #batch*[seq_len]
         cost = criterion(preds,Int_text,preds_size,Int_length)
         loss_avg_for_val.add(cost)
         _, preds = preds.max(2)
@@ -130,9 +142,9 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         sim_preds = convert.decoder(preds,preds_size)
         print('\n',"the predicted text is {}, while the real text is {}".format(sim_preds[0], cpu_text[0]))
         for pred, target in zip(sim_preds,cpu_text):
-            if pred == target:
+            if pred.lower() == target.lower():
                 n_correct += 1
-    accuracy = n_correct / float(max_iter * opt.batchSize)
+    accuracy = n_correct / float(max_iter * opt.testbatchSize)
     if best_model == None:
         best_accuracy = accuracy
         is_change = True
@@ -155,7 +167,7 @@ def trainBatch(net, criterion, optimizer):
     Int_text,Int_length = convert.encoder(cpu_text)
     assert len(Int_text) == Int_length.sum(), 'the encoded text length is not equal to variable length '
     preds = net(image)
-    preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.batchSize))  # batch*seq_len
+    preds_size = Variable(torch.IntTensor([preds.size(0)] * opt.trainbatchSize))  # batch*seq_len
     torch.backends.cudnn.enabled = False
     cost = criterion(preds, Int_text, preds_size, Int_length)
     torch.backends.cudnn.enabled = True
@@ -167,10 +179,10 @@ def trainBatch(net, criterion, optimizer):
 #start log
 if not os.path.exists(opt.log_dir):
     os.makedirs(opt.log_dir)
-f_name = '{0}/log1.txt'.format(opt.log_dir)
+f_name = '{0}/log_for_train.txt'.format(opt.log_dir)
 f = open(f_name,'w')
-for epoch in range(opt.nepoch):
-
+for epoch in range(start_epoch,opt.nepoch):
+    print('current epoch: %d' % (epoch+1))
     train_iter = iter(train_loader)
     tbar = tqdm(range(len(train_loader)))
     for i in tbar:
@@ -193,7 +205,7 @@ for epoch in range(opt.nepoch):
                 f.write('------------------------------------------------------\n')
 
         if i%opt.saveInterval == 0 and i != 0:
-            torch.save(crnn.state_dict(),'{0}/RESNET_CRNN_{1}_{2}.pth'.format(opt.expr_dir, epoch+1, i))
+            torch.save({'model':crnn.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch},'{0}/RESNET_CRNN_{1}_{2}.pth'.format(opt.expr_dir, epoch+1, i))
     scheduler.step()
     #logging finish
 f.close()
