@@ -31,8 +31,7 @@ def crop_img(img,texts):
     x_min = min(x1, x2, x3, x4)
     y_min = min(y1, y2, y3, y4)
     crop_img = img[y_min:y_max,x_min:x_max]
-    crop_img_bytes = crop_img.tobytes()
-    return crop_img_bytes
+    return crop_img
 
 
 
@@ -56,7 +55,7 @@ def _is_difficult(word):
     return not re.match('^[\w]+$', word)
 
 
-def createDataset(outputPath, imagePathList, jsonList, checkValid=True):
+def createDataset(outputPath, imagePathList, jsonList):
     """
     Create LMDB dataset for CRNN training.
     ARGS:
@@ -78,22 +77,21 @@ def createDataset(outputPath, imagePathList, jsonList, checkValid=True):
             continue
         json = jsonList[i]
         img = cv2.imread(imagePath)
-        if checkValid:
-            if not checkImageIsValid(img):
-                print('%s is not a valid image' % imagePath)
-                continue
+
         with open(json, 'r') as f:
             data = json.load(f)
 
         label_list = []
         img_list = []
         for info in data['lines']:
-            if info['ignore'] == 0:
+            if info['ignore'] != 0:
+                continue
+            crop_img = crop_img(img,info)
+            if checkImageIsValid(crop_img):
                 label_list.append(info['transcription'])
-                img_list.append(crop_img(img))
-
-        # with open(imagePath, 'rb') as f:
-        #     imageBin = f.read()
+                img_list.append(crop_img.tobytes())
+            else:
+                print('%s is invalid, the Height is %d, the Width is %d' % (imagePath,crop_img.shape[0],crop_img.shape[1]))
         assert len(label_list) == len(img_list),'the label_list != img_list'
         for i in range(len(img_list)):
             imageKey = 'image-%09d' % cnt
