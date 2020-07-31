@@ -90,7 +90,8 @@ def createDataset(outputPath, imagePathList, jsonList):
             crop_image = crop_img(img,info)
             if checkImageIsValid(crop_image):
                 label_list.append(info['transcription'])
-                img_list.append(crop_image.tobytes())
+                encode_img = cv2.imencode('.jpg',crop_image)[1].tobytes()
+                img_list.append(encode_img)
             else:
                 print('%s is invalid, the Height is %d, the Width is %d' % (imagePath,crop_image.shape[0],crop_image.shape[1]))
         assert len(label_list) == len(img_list),'the label_list != img_list'
@@ -120,6 +121,7 @@ if __name__ == "__main__":
         img_list.append(os.path.join(img_root,'train_ReCTS_%06d.jpg' % (i+1)))
         json_list.append(os.path.join(gt_root,'train_ReCTS_%06d.json' % (i+1)))
     createDataset(outputPath=lmdb_output,imagePathList=img_list,jsonList=json_list)
+    print('finish')
 
 
 

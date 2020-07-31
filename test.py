@@ -24,7 +24,7 @@ convert = dataset.strLabelToInt(alphabet)
 #加载模型
 device = torch.device('cpu')
 model = ResNet_ASTER(num_class=convert.num_class,with_lstm=True).to(device)
-model.load_state_dict(torch.load('/data1/zem/Resnet.CRNN/expr/RESNET_CRNN_1_30000.pth',map_location='cpu'))
+model.load_state_dict(torch.load('/data1/zem/Resnet.CRNN/expr/best_model.pth',map_location='cpu'))
 
 n_correct = 0
 
