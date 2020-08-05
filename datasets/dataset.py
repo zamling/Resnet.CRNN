@@ -8,6 +8,7 @@ import sys
 import six
 import torch
 from torch.utils import data
+import json
 import collections
 from torch.utils.data import sampler
 from torchvision import transforms
@@ -111,14 +112,73 @@ class strLabelToInt(object):
                 index += l
             return texts
 
+class Chinese_LmdbDataset(data.Dataset):
+    def __init__(self, root,num,is_train = True,transform = None):
+        self.env = lmdb.open(root,max_readers=32,readonly=True)
+        self.num = num
+        assert self.env is not None, "cannot create the lmdb from %s" %root
+        self.txn = self.env.begin()
+        self.transform = transform
+        self.is_train = is_train
+        if is_train:
+            self.nSamples = int(self.txn.get(b'num-samples')) - 1000
+        else:
+            self.nSamples = 1000
+
+
+
+    def __len__(self):
+        return self.nSamples
+
+    def __getitem__(self, item):
+        if self.is_train:
+            item += 1001
+        else:
+            item += 1
+        img_key = b"image-%09d" % item
+        imgbuf = self.txn.get(img_key)
+
+        buf = six.BytesIO()
+        buf.write(imgbuf)
+        buf.seek(0)
+        try:
+            img = Image.open(buf).convert('RGB')
+        except IOError:
+            print('Corrupted image for %d' % item)
+            return self[item + 1]
+        label_key = b'label-%09d' % item
+        word = self.txn.get(label_key).decode()
+        assert len(word) != 0, 'the word is empty'
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, word
+
 
 
 if __name__ == "__main__":
-    alphabet = string.printable[:-6]
+    with open('/data1/zem/Resnet.CRNN/alphabet.json', 'r') as f:
+        data = json.load(f)
+    alphabet = data['alphabet']
     convert = strLabelToInt(alphabet)
-    texts = ('THE', 'the','aAbBcC', 'aaadfdfccd')
-    Int_text, Int_length = convert.encoder(texts)
-    print(Int_text, "length is :", Int_length)
-    print(convert.decoder(Int_text,Int_length))
+    class_num = convert.num_class
+    convert = strLabelToInt(alphabet)
+    env = lmdb.open('/data1/zem/Resnet.CRNN/data/lmdb/recognition/ReCTS')
+    txn = env.begin()
+    nSamples = int(txn.get(b"num-samples"))
+    labels = []
+    for item in range(1,nSamples + 1):
+        label_key = b'label-%09d' % item
+        label = txn.get(label_key).decode()
+        labels.append(label)
+    labels = tuple(labels)
+    Int_text,Int_length = convert.encoder(labels)
+    texts = convert.decoder(Int_text,Int_length)
+    labels = list(labels)
+    print(labels)
+    print(texts)
+    for i in range(len(labels)):
+        if labels[i] != texts[i]:
+            print(labels[i],'=>',texts[i])
+
 
 

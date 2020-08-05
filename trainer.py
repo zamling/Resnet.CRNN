@@ -4,6 +4,7 @@ import torch
 import argparse
 import torch.nn as nn
 from utils import utils
+import json
 import string
 
 from datasets import concatdataset, dataset
@@ -23,20 +24,20 @@ annotation_val 802734
 parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot',required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to validation dataset')
-parser.add_argument('--worker', type=int, help='number of data loading workers',default=4)
+parser.add_argument('--worker', type=int, help='number of data loading workers',default=0)
 parser.add_argument('--trainbatchSize',type=int, default=800, help='the input batch size')
 parser.add_argument('--testbatchSize',type=int, default=500, help='the input batch size')
-parser.add_argument('--nepoch', type=int, default=7, help='number of epochs to train')
+parser.add_argument('--nepoch', type=int, default=10, help='number of epochs to train')
 parser.add_argument('--expr_dir', default='expr', help='Where to store samples and models')
 parser.add_argument('--log_dir', default='log', help='Where to store log')
-parser.add_argument('--displayInterval', type=int, default=1000, help='Interval to be displayed')
+parser.add_argument('--displayInterval', type=int, default=10, help='Interval to be displayed')
 parser.add_argument('--trainNumber', type=int, default=100000000, help='Number of samples to train')
 parser.add_argument('--testNumber', type=int, default=100000000, help='Number of samples to test')
-parser.add_argument('--valInterval', type=int, default=5000, help='Interval to be displayed')
-parser.add_argument('--saveInterval', type=int, default=5000, help='Interval to be displayed')
+parser.add_argument('--valInterval', type=int, default=50, help='Interval to be displayed')
 parser.add_argument('--lr',type=float, default=1,help='learning rate')
 parser.add_argument('--weight_decay',type=float, default=0.0)
-parser.add_argument('--pretrain',type=bool, default=True)
+parser.add_argument('--is_English',type=bool,default=False)
+parser.add_argument('--pretrain',type=bool, default=False)
 
 
 
@@ -61,42 +62,54 @@ else:
     device = torch.device('cpu')
 
 
-def get_data(data_dir, num, batch_size,worker):
+def get_data(data_dir, num, batch_size,worker,is_train):
     if isinstance(data_dir, list):
         dataset_list = []
         for data_dir_ in data_dir:
-            dataset_list.append(dataset.LmdbDataset(data_dir_,num,transform=dataset.resizeNormalize((100,32))))
+            dataset_list.append(dataset.Chinese_LmdbDataset(data_dir_,num,is_train=is_train,transform=dataset.resizeNormalize((100,32))))
         datasets = concatdataset.ConcatDataset(dataset_list)
     else:
-        datasets = dataset.LmdbDataset(data_dir,num,transform=dataset.resizeNormalize((100,32)))
+        datasets = dataset.Chinese_LmdbDataset(data_dir,num,is_train=is_train,transform=dataset.resizeNormalize((100,32)))
     print('total image', len(datasets))
 
     data_loader = DataLoader(datasets,batch_size=batch_size,shuffle=True,num_workers=worker,drop_last=True)
 
     return datasets, data_loader
 
+if opt.is_English:
+    train_dir_list = [opt.trainRoot+i for i in ['/CVPR2016','/NIPS2014']]
+    test_dir = opt.trainRoot + '/benchmark_lmdbs_new/IIIT5K_3000'
+else:
+    train_dir_list = opt.trainRoot + '/ReCTS'
+    test_dir = opt.trainRoot + '/ReCTS'
 
-train_dir_list = [opt.trainRoot+i for i in ['/CVPR2016','/NIPS2014']]
-test_dir = opt.trainRoot + '/benchmark_lmdbs_new/IIIT5K_3000'
-
-train_dataset, train_loader = get_data(train_dir_list, num=opt.trainNumber,batch_size=opt.trainbatchSize, worker=opt.worker)
-test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=opt.testbatchSize, worker=opt.worker)
+train_dataset, train_loader = get_data(train_dir_list, num=opt.trainNumber,batch_size=opt.trainbatchSize, worker=opt.worker,is_train=True)
+test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=opt.testbatchSize, worker=opt.worker,is_train=False)
 
 
-alphabet = string.printable[:-6]
-convert = dataset.strLabelToInt(alphabet)
+if opt.is_English:
+    alphabet = string.printable[:-6]
+    convert = dataset.strLabelToInt(alphabet)
+    class_num = convert.num_class
+else:
+    with open('/data1/zem/Resnet.CRNN/alphabet.json','r') as f:
+        data = json.load(f)
+    alphabet = data['alphabet']
+    convert = dataset.strLabelToInt(alphabet)
+    class_num = convert.num_class
+
 criterion = nn.CTCLoss(zero_infinity=True)
 loss_avg_for_val = utils.Averager()
 loss_avg_for_tra = utils.Averager()
 
 
 
-crnn = resnet_aster.ResNet_ASTER(num_class=convert.num_class,with_lstm=True).to(device)
+crnn = resnet_aster.ResNet_ASTER(num_class=class_num,with_lstm=True).to(device)
 
 param_groups = crnn.parameters()
 param_groups = filter(lambda p: p.requires_grad, param_groups)
 optimizer = torch.optim.Adadelta(param_groups, lr=opt.lr, weight_decay=opt.weight_decay)
-scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4, 5], gamma=0.1)
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[7, 8], gamma=0.1)
 
 
 # net = torch.nn.DataParallel(crnn,device_ids=range(torch.cuda.device_count()))
@@ -142,7 +155,7 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         sim_preds = convert.decoder(preds,preds_size)
         print('\n',"the predicted text is {}, while the real text is {}".format(sim_preds[0], cpu_text[0]))
         for pred, target in zip(sim_preds,cpu_text):
-            if pred.lower() == target.lower():
+            if pred == target:
                 n_correct += 1
     accuracy = n_correct / float(max_iter * opt.testbatchSize)
     if best_model == None:
@@ -179,7 +192,7 @@ def trainBatch(net, criterion, optimizer):
 #start log
 if not os.path.exists(opt.log_dir):
     os.makedirs(opt.log_dir)
-f_name = '{0}/log_for_train.txt'.format(opt.log_dir)
+f_name = '{0}/chinese_log_for_train.txt'.format(opt.log_dir)
 f = open(f_name,'w')
 for epoch in range(start_epoch,opt.nepoch):
     print('current epoch: %d' % (epoch+1))
@@ -203,9 +216,8 @@ for epoch in range(start_epoch,opt.nepoch):
                 f.write('------------------------------------------------------\n')
                 f.write('Best accuracy %f, the model name is RESNET_CRNN_%d_%d.pth \n' % (best_model,epoch+1,i))
                 f.write('------------------------------------------------------\n')
-
-        if i%opt.saveInterval == 0 and i != 0:
-            torch.save({'model':crnn.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch},'{0}/RESNET_CRNN_{1}_{2}.pth'.format(opt.expr_dir, epoch+1, i))
+                torch.save({'model':crnn.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch},'{0}/Chinese_best_model.pth'.format(opt.expr_dir))
     scheduler.step()
     #logging finish
 f.close()
+print('training successfully finish')
