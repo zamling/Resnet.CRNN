@@ -78,7 +78,7 @@ class ResNet_ASTER(nn.Module):
         self.layer4 = self._make_layer(256, 6, [2, 1]) # [2, 25]
         self.layer5 = self._make_layer(512, 3, [2, 1]) # [1, 25]
 
-        self.output_layer = nn.Linear(512,num_class)
+        self.outLayer = nn.Linear(512,num_class)
 
         if with_lstm:
             self.rnn = nn.LSTM(512, 256, bidirectional=True, num_layers=2)
@@ -92,8 +92,8 @@ class ResNet_ASTER(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-        nn.init.normal_(self.output_layer.weight,std=0.01)
-        nn.init.constant_(self.output_layer.bias,0)
+        nn.init.normal_(self.outLayer.weight,std=0.01)
+        nn.init.constant_(self.outLayer.bias,0)
 
 
 
@@ -125,11 +125,15 @@ class ResNet_ASTER(nn.Module):
             rnn_feat, _ = self.rnn(cnn_feat)
             T,b,h = rnn_feat.size()
             output = rnn_feat.view(T*b,h)
-            output = self.output_layer(output)
+            output = self.outLayer(output)
             output = output.view(T,b,-1)
             output = nn.functional.log_softmax(output,dim=2)
             return output
         else:
             return cnn_feat
+
+if __name__ == "__main__":
+    net = ResNet_ASTER(num_class=4396,with_lstm=True)
+    print(net.named_modules())
 
 

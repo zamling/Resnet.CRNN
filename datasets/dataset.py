@@ -12,6 +12,7 @@ import json
 import collections
 from torch.utils.data import sampler
 from torchvision import transforms
+from . import transforms as T
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -47,21 +48,37 @@ class LmdbDataset(data.Dataset):
         word = self.txn.get(label_key).decode()
         assert len(word) != 0, 'the word is empty'
         if self.transform is not None:
-            img = self.transform(img)
+            img,word = self.transform(img,word)
         return img, word
 
 class resizeNormalize(object):
 
-    def __init__(self, size, interpolation=Image.BILINEAR):
+    def __init__(self, size,is_train = True, interpolation=Image.BILINEAR):
         self.size = size
         self.interpolation = interpolation
-        self.toTensor = transforms.ToTensor()
+        if is_train:
+            pixel_aug_prob = 0.3
+        else:
+            pixel_aug_prob = 0.0
 
-    def __call__(self, img):
+        self.Img_AUG = T.Compose(
+            [
+                T.RandomBrightness(pixel_aug_prob),
+                T.RandomContrast(pixel_aug_prob),
+                T.RandomHue(pixel_aug_prob),
+                T.RandomSaturation(pixel_aug_prob),
+                T.RandomGamma(pixel_aug_prob),
+            ]
+        )
+        self.toTensor = transforms.Compose([transforms.RandomApply([transforms.RandomAffine(degrees=10)],p=pixel_aug_prob),
+                                            transforms.ToTensor()])
+
+    def __call__(self, img,target):
         img = img.resize(self.size, self.interpolation)
+        img,target = self.Img_AUG(img,target)
         img = self.toTensor(img)
         img.sub_(0.5).div_(0.5)
-        return img
+        return img,target
 
 
 
@@ -113,9 +130,8 @@ class strLabelToInt(object):
             return texts
 
 class Chinese_LmdbDataset(data.Dataset):
-    def __init__(self, root,num,is_train = True,transform = None):
+    def __init__(self, root,is_train = True,transform = None):
         self.env = lmdb.open(root,max_readers=32,readonly=True)
-        self.num = num
         assert self.env is not None, "cannot create the lmdb from %s" %root
         self.txn = self.env.begin()
         self.transform = transform
@@ -150,7 +166,7 @@ class Chinese_LmdbDataset(data.Dataset):
         word = self.txn.get(label_key).decode()
         assert len(word) != 0, 'the word is empty'
         if self.transform is not None:
-            img = self.transform(img)
+            img,word = self.transform(img,word)
         return img, word
 
 

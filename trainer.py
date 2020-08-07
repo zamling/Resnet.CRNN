@@ -24,10 +24,10 @@ annotation_val 802734
 parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot',required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to validation dataset')
-parser.add_argument('--worker', type=int, help='number of data loading workers',default=0)
+parser.add_argument('--worker', type=int, help='number of data loading workers',default=4)
 parser.add_argument('--trainbatchSize',type=int, default=800, help='the input batch size')
 parser.add_argument('--testbatchSize',type=int, default=500, help='the input batch size')
-parser.add_argument('--nepoch', type=int, default=10, help='number of epochs to train')
+parser.add_argument('--nepoch', type=int, default=60, help='number of epochs to train')
 parser.add_argument('--expr_dir', default='expr', help='Where to store samples and models')
 parser.add_argument('--log_dir', default='log', help='Where to store log')
 parser.add_argument('--displayInterval', type=int, default=10, help='Interval to be displayed')
@@ -37,7 +37,7 @@ parser.add_argument('--valInterval', type=int, default=50, help='Interval to be 
 parser.add_argument('--lr',type=float, default=1,help='learning rate')
 parser.add_argument('--weight_decay',type=float, default=0.0)
 parser.add_argument('--is_English',type=bool,default=False)
-parser.add_argument('--pretrain',type=bool, default=False)
+parser.add_argument('--pretrain',type=bool, default=True)
 
 
 
@@ -62,14 +62,25 @@ else:
     device = torch.device('cpu')
 
 
-def get_data(data_dir, num, batch_size,worker,is_train):
+def get_data(data_dir,flag, num, batch_size,worker,is_train):
     if isinstance(data_dir, list):
+        assert len(data_dir) == len(flag), "the data dir don't match the flag"
         dataset_list = []
-        for data_dir_ in data_dir:
-            dataset_list.append(dataset.Chinese_LmdbDataset(data_dir_,num,is_train=is_train,transform=dataset.resizeNormalize((100,32))))
+        for i in range(len(data_dir)):
+            if flag[i] == 'E':
+                dataset_list.append(dataset.LmdbDataset(data_dir[i],num=num,transform=dataset.resizeNormalize((100,32),is_train=is_train)))
+            elif flag[i] == 'C':
+                dataset_list.append(dataset.Chinese_LmdbDataset(data_dir[i],is_train=is_train,transform=dataset.resizeNormalize((100,32),is_train=is_train)))
+            else:
+                print('error flag %s' % (flag[i]))
         datasets = concatdataset.ConcatDataset(dataset_list)
     else:
-        datasets = dataset.Chinese_LmdbDataset(data_dir,num,is_train=is_train,transform=dataset.resizeNormalize((100,32)))
+        if flag == 'E':
+            datasets = dataset.LmdbDataset(data_dir,num=num,transform=dataset.resizeNormalize((100,32),is_train=is_train))
+        elif flag == 'C':
+            datasets = dataset.Chinese_LmdbDataset(data_dir,is_train=is_train,transform=dataset.resizeNormalize((100,32),is_train=is_train))
+        else:
+            datasets = None
     print('total image', len(datasets))
 
     data_loader = DataLoader(datasets,batch_size=batch_size,shuffle=True,num_workers=worker,drop_last=True)
@@ -79,12 +90,16 @@ def get_data(data_dir, num, batch_size,worker,is_train):
 if opt.is_English:
     train_dir_list = [opt.trainRoot+i for i in ['/CVPR2016','/NIPS2014']]
     test_dir = opt.trainRoot + '/benchmark_lmdbs_new/IIIT5K_3000'
+    train_flag = []
+    test_flag = []
 else:
     train_dir_list = opt.trainRoot + '/ReCTS'
     test_dir = opt.trainRoot + '/ReCTS'
+    train_flag = 'C'
+    test_flag = 'C'
 
-train_dataset, train_loader = get_data(train_dir_list, num=opt.trainNumber,batch_size=opt.trainbatchSize, worker=opt.worker,is_train=True)
-test_dataset, test_loader = get_data(test_dir, num=opt.testNumber,batch_size=opt.testbatchSize, worker=opt.worker,is_train=False)
+train_dataset, train_loader = get_data(train_dir_list,flag=train_flag, num=opt.trainNumber,batch_size=opt.trainbatchSize, worker=opt.worker,is_train=True)
+test_dataset, test_loader = get_data(test_dir,flag=test_flag, num=opt.testNumber,batch_size=opt.testbatchSize, worker=opt.worker,is_train=False)
 
 
 if opt.is_English:
@@ -109,7 +124,7 @@ crnn = resnet_aster.ResNet_ASTER(num_class=class_num,with_lstm=True).to(device)
 param_groups = crnn.parameters()
 param_groups = filter(lambda p: p.requires_grad, param_groups)
 optimizer = torch.optim.Adadelta(param_groups, lr=opt.lr, weight_decay=opt.weight_decay)
-scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[7, 8], gamma=0.1)
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[35, 50], gamma=0.1)
 
 
 # net = torch.nn.DataParallel(crnn,device_ids=range(torch.cuda.device_count()))
@@ -117,10 +132,9 @@ criterion = criterion.to(device)
 
 
 if opt.pretrain:
-    checkpoint = torch.load('/data1/zem/Resnet.CRNN/expr/RESNET_CRNN_2_20000.pth', map_location='cuda:0')
-    crnn.load_state_dict(checkpoint['model'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    start_epoch = checkpoint['epoch'] + 1
+    crnn.load_state_dict(torch.load('/data1/zem/Resnet.CRNN/expr/best_model.pth', map_location='cuda:0'),strict=False)
+    print('successfully load model')
+    start_epoch = 0
 else:
     start_epoch = 0
 
