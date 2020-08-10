@@ -43,15 +43,15 @@ alphabet = data['alphabet']
 convert = dataset.strLabelToInt(alphabet)
 class_num = convert.num_class
 test_data_dir = '/data1/zem/OCR_and_STR/data/lmdb/recognition/ReCTS'
-datasets = dataset.Chinese_LmdbDataset(test_data_dir,is_train=False,transform=dataset.resizeNormalize((100,32)))
+datasets = dataset.Chinese_LmdbDataset(test_data_dir,is_train=False,transform=dataset.resizeNormalize((100,32),is_train=False))
 test_loader = DataLoader(datasets,batch_size=500,shuffle=True,num_workers=0,drop_last=True)
 print('the test loader has %d steps' % (len(test_loader)))
 convert = dataset.strLabelToInt(alphabet)
 #加载模型
-device = torch.device('cuda:0')
+device = torch.device('cpu')
 model = ResNet_ASTER(num_class=convert.num_class,with_lstm=True).to(device)
-checkpoint = torch.load('/data1/zem/Resnet.CRNN/expr/Chinese_best_model.pth',map_location='cuda:0')
-model.load_state_dict(checkpoint['model'])
+# checkpoint = torch.load('/data1/zem/Resnet.CRNN/expr/chinese_best_model.pth',map_location='cuda:0')
+model.load_state_dict(torch.load('/data1/zem/Resnet.CRNN/expr/chinese_best_model.pth',map_location='cpu'))
 
 
 n_correct = 0

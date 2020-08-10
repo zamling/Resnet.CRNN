@@ -13,14 +13,14 @@ import os
 from torch.utils import data
 from torchvision import transforms
 
-with open('/data1/zem/Resnet.CRNN/alphabet.json', 'r') as f:
-    data = json.load(f)
-alphabet = data['alphabet']
-convert = dataset.strLabelToInt(alphabet)
-
-print(len(alphabet))
-new_alpha = set(alphabet)
-print(len(new_alpha))
+# with open('/data1/zem/Resnet.CRNN/alphabet.json', 'r') as f:
+#     data = json.load(f)
+# alphabet = data['alphabet']
+# convert = dataset.strLabelToInt(alphabet)
+#
+# print(len(alphabet))
+# new_alpha = set(alphabet)
+# print(len(new_alpha))
 
 
 
@@ -40,7 +40,9 @@ print(len(new_alpha))
 #         print(label)
 #         input('checkpoint')
 
-
-
+checkpoint = torch.load('/data1/zem/Resnet.CRNN/expr/Chinese_best_model.pth',map_location='cuda:0')
+model = checkpoint['model']
+torch.save(model,'/data1/zem/Resnet.CRNN/expr/chinese_best_model.pth')
+print('finish')
 
 

@@ -6,7 +6,7 @@ import torch.nn as nn
 from utils import utils
 import json
 import string
-
+import numpy as np
 from datasets import concatdataset, dataset
 from modules import resnet_aster
 from torch.utils.data import DataLoader
@@ -60,6 +60,21 @@ else:
     print('using cpu actually')
     torch.set_default_tensor_type('torch.FloatTensor')
     device = torch.device('cpu')
+
+
+def Lev_distance(A, B):
+    dp = np.array(np.arange(len(B) + 1))
+    for i in range(1, len(A) + 1):
+        temp1 = dp[0]
+        dp[0] += 1
+        for j in range(1, len(B) + 1):
+            temp2 = dp[j]
+            if A[i - 1] == B[j - 1]:
+                dp[j] = temp1
+            else:
+                dp[j] = min(temp1, min(dp[j - 1], dp[j])) + 1
+            temp1 = temp2
+    return dp[len(B)]
 
 
 def get_data(data_dir,flag, num, batch_size,worker,is_train):
@@ -150,7 +165,7 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         p.requires_grad = False
     net.eval()
     val_iter = iter(data_loader)
-    n_correct = 0
+    sum_dist = 0
     max_iter = min(len(data_loader),max_iter)
     pbar = tqdm(range(max_iter))
     for i in pbar:
@@ -168,24 +183,25 @@ def Val(net,data_loader,criterion,best_model,max_iter=1000000):
         preds = preds.transpose(1, 0).contiguous().view(-1)
         sim_preds = convert.decoder(preds,preds_size)
         print('\n',"the predicted text is {}, while the real text is {}".format(sim_preds[0], cpu_text[0]))
-        for pred, target in zip(sim_preds,cpu_text):
-            if pred == target:
-                n_correct += 1
-    accuracy = n_correct / float(max_iter * opt.testbatchSize)
+        for pred, target in zip(sim_preds, cpu_text):
+            dist = Lev_distance(pred, target)
+            dist /= max(len(pred), len(target))
+            sum_dist += dist
+    res_dist = 1-float(sum_dist)/1000
     if best_model == None:
-        best_accuracy = accuracy
+        best_distance = res_dist
         is_change = True
     else:
-        if accuracy > best_model:
-            best_accuracy = accuracy
+        if res_dist > best_model:
+            best_distance = res_dist
             is_change = True
         else:
-            best_accuracy = best_model
+            best_distance = best_model
 
 
-    print('Test loss: %f, accuracy: %f, best accuracy %f' % (loss_avg_for_val.val(), accuracy, best_accuracy))
+    print('Test loss: %f, Lev_distance: %f, best distance %f' % (loss_avg_for_val.val(), res_dist, best_distance))
     loss_avg_for_val.reset()
-    return best_accuracy, is_change
+    return best_distance, is_change
 
 def trainBatch(net, criterion, optimizer):
     data = train_iter.next()
@@ -206,7 +222,7 @@ def trainBatch(net, criterion, optimizer):
 #start log
 if not os.path.exists(opt.log_dir):
     os.makedirs(opt.log_dir)
-f_name = '{0}/chinese_log_for_train.txt'.format(opt.log_dir)
+f_name = '{0}/chinese_log_for_train_V3.txt'.format(opt.log_dir)
 f = open(f_name,'w')
 for epoch in range(start_epoch,opt.nepoch):
     print('current epoch: %d' % (epoch+1))
@@ -228,7 +244,7 @@ for epoch in range(start_epoch,opt.nepoch):
             best_model, is_change = Val(crnn,test_loader,criterion,best_model)
             if is_change:
                 f.write('------------------------------------------------------\n')
-                f.write('Best accuracy %f, the model name is RESNET_CRNN_%d_%d.pth \n' % (best_model,epoch+1,i))
+                f.write('Best distance %f, the model name is RESNET_CRNN_%d_%d.pth \n' % (best_model,epoch+1,i))
                 f.write('------------------------------------------------------\n')
                 torch.save({'model':crnn.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch},'{0}/Chinese_best_model.pth'.format(opt.expr_dir))
     scheduler.step()

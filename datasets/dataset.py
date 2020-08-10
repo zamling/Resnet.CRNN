@@ -57,7 +57,7 @@ class resizeNormalize(object):
         self.size = size
         self.interpolation = interpolation
         if is_train:
-            pixel_aug_prob = 0.3
+            pixel_aug_prob = 0.5
         else:
             pixel_aug_prob = 0.0
 
@@ -172,29 +172,10 @@ class Chinese_LmdbDataset(data.Dataset):
 
 
 if __name__ == "__main__":
-    with open('/data1/zem/Resnet.CRNN/alphabet.json', 'r') as f:
-        data = json.load(f)
-    alphabet = data['alphabet']
-    convert = strLabelToInt(alphabet)
-    class_num = convert.num_class
-    convert = strLabelToInt(alphabet)
-    env = lmdb.open('/data1/zem/Resnet.CRNN/data/lmdb/recognition/ReCTS')
+    env = lmdb.open('/data1/zem/Resnet.CRNN/data/lmdb/recognition/CVPR2016')
     txn = env.begin()
     nSamples = int(txn.get(b"num-samples"))
-    labels = []
-    for item in range(1,nSamples + 1):
-        label_key = b'label-%09d' % item
-        label = txn.get(label_key).decode()
-        labels.append(label)
-    labels = tuple(labels)
-    Int_text,Int_length = convert.encoder(labels)
-    texts = convert.decoder(Int_text,Int_length)
-    labels = list(labels)
-    print(labels)
-    print(texts)
-    for i in range(len(labels)):
-        if labels[i] != texts[i]:
-            print(labels[i],'=>',texts[i])
+    print(nSamples)
 
 
 
