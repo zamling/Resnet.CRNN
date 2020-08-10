@@ -30,10 +30,10 @@ parser.add_argument('--testbatchSize',type=int, default=500, help='the input bat
 parser.add_argument('--nepoch', type=int, default=60, help='number of epochs to train')
 parser.add_argument('--expr_dir', default='expr', help='Where to store samples and models')
 parser.add_argument('--log_dir', default='log', help='Where to store log')
-parser.add_argument('--displayInterval', type=int, default=10, help='Interval to be displayed')
+parser.add_argument('--displayInterval', type=int, default=20, help='Interval to be displayed')
 parser.add_argument('--trainNumber', type=int, default=100000000, help='Number of samples to train')
 parser.add_argument('--testNumber', type=int, default=100000000, help='Number of samples to test')
-parser.add_argument('--valInterval', type=int, default=50, help='Interval to be displayed')
+parser.add_argument('--valInterval', type=int, default=100, help='Interval to be displayed')
 parser.add_argument('--lr',type=float, default=1,help='learning rate')
 parser.add_argument('--weight_decay',type=float, default=0.0)
 parser.add_argument('--is_English',type=bool,default=False)
@@ -88,7 +88,10 @@ def get_data(data_dir,flag, num, batch_size,worker,is_train):
                 dataset_list.append(dataset.Chinese_LmdbDataset(data_dir[i],is_train=is_train,transform=dataset.resizeNormalize((100,32),is_train=is_train)))
             else:
                 print('error flag %s' % (flag[i]))
-        datasets = concatdataset.ConcatDataset(dataset_list)
+        if is_train:
+            datasets = concatdataset.ConcatDataset_V2(dataset_list)
+        else:
+            datasets = concatdataset.ConcatDataset(dataset_list)
     else:
         if flag == 'E':
             datasets = dataset.LmdbDataset(data_dir,num=num,transform=dataset.resizeNormalize((100,32),is_train=is_train))
@@ -108,10 +111,10 @@ if opt.is_English:
     train_flag = []
     test_flag = []
 else:
-    train_dir_list = opt.trainRoot + '/ReCTS'
-    test_dir = opt.trainRoot + '/ReCTS'
-    train_flag = 'C'
-    test_flag = 'C'
+    train_dir_list = [opt.trainRoot+i for i in ['/ReCTS','/NIPS2014','/CVPR2016']]
+    test_dir = [opt.trainRoot+i for i in ['/ReCTS','/benchmark_lmdbs_new/IIIT5K_3000']]
+    train_flag = ['C','E','E']
+    test_flag = ['C','E']
 
 train_dataset, train_loader = get_data(train_dir_list,flag=train_flag, num=opt.trainNumber,batch_size=opt.trainbatchSize, worker=opt.worker,is_train=True)
 test_dataset, test_loader = get_data(test_dir,flag=test_flag, num=opt.testNumber,batch_size=opt.testbatchSize, worker=opt.worker,is_train=False)
@@ -222,7 +225,7 @@ def trainBatch(net, criterion, optimizer):
 #start log
 if not os.path.exists(opt.log_dir):
     os.makedirs(opt.log_dir)
-f_name = '{0}/chinese_log_for_train_V3.txt'.format(opt.log_dir)
+f_name = '{0}/synthesis_log_for_train.txt'.format(opt.log_dir)
 f = open(f_name,'w')
 for epoch in range(start_epoch,opt.nepoch):
     print('current epoch: %d' % (epoch+1))
@@ -246,7 +249,7 @@ for epoch in range(start_epoch,opt.nepoch):
                 f.write('------------------------------------------------------\n')
                 f.write('Best distance %f, the model name is RESNET_CRNN_%d_%d.pth \n' % (best_model,epoch+1,i))
                 f.write('------------------------------------------------------\n')
-                torch.save({'model':crnn.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch},'{0}/Chinese_best_model.pth'.format(opt.expr_dir))
+                torch.save({'model':crnn.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch},'{0}/synthesis_best_model.pth'.format(opt.expr_dir))
     scheduler.step()
     #logging finish
 f.close()
